@@ -18,27 +18,22 @@
         button { background: #d9534f; color: #fff; border: none; padding: 8px 14px; border-radius: 5px; cursor: pointer; font-weight: bold; }
         button:hover { background: #c9302c; }
 
-        /* Barra flotante del carrito y datos del cliente */
         #carrito-flotante { 
             position: fixed; bottom: 0; left: 0; width: 100%; background: #222; color: #fff; 
             padding: 12px 20px; box-shadow: 0 -2px 10px rgba(0,0,0,0.3); box-sizing: border-box; 
             display: flex; flex-direction: column; gap: 10px; z-index: 100;
         }
         .carrito-superior { display: flex; justify-content: space-between; align-items: center; font-size: 0.95em; }
-        
-        /* Inputs de datos del cliente */
         .datos-cliente { display: flex; gap: 10px; width: 100%; flex-wrap: wrap; }
         .datos-cliente input { 
             flex: 1; min-width: 130px; padding: 8px; border-radius: 4px; border: none; font-size: 0.9em; 
         }
-
         #btn-whatsapp { 
             background: #25d366; color: #fff; padding: 10px 20px; text-decoration: none; 
             border-radius: 5px; font-weight: bold; display: none; text-align: center; width: 100%; box-sizing: border-box;
         }
         #btn-whatsapp:hover { background: #1ebd59; }
 
-        /* Estilos para el Modal de Zoom de Imágenes */
         .modal-zoom {
             display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%;
             background-color: rgba(0, 0, 0, 0.85); align-items: center; justify-content: center;
@@ -53,19 +48,15 @@
 </head>
 <body>
 
-    <!-- Contenedor para la imagen de portada -->
     <div id="portada-wrapper"></div>
-    
     <h1 id="titulo-menu">Cargando Menú...</h1>
     <div id="menu-container"></div>
 
-    <!-- Barra fija del carrito y datos -->
     <div id="carrito-flotante">
         <div class="datos-cliente">
             <input type="text" id="inputNombre" placeholder="Tu Nombre y Apellido" required>
             <input type="tel" id="inputTelefono" placeholder="Tu Teléfono / WhatsApp" required>
         </div>
-        
         <div class="carrito-superior">
             <div>
                 <strong>Carrito:</strong> <span id="contador-carrito">0</span> ítems | 
@@ -75,7 +66,6 @@
         <a id="btn-whatsapp" href="#" onclick="return validarYEnviarWhatsApp(event);">Enviar Pedido por WhatsApp</a>
     </div>
 
-    <!-- Modal para zoom de imágenes -->
     <div id="modalZoom" class="modal-zoom" onclick="cerrarModalZoom()">
         <span class="btn-cerrar">&times;</span>
         <img id="imgAmpliada" src="" alt="Vista ampliada">
@@ -88,7 +78,6 @@
         let carrito = [];
         let productosGlobal = [];
 
-        // Guardar y recuperar datos del cliente automáticamente
         document.getElementById('inputNombre').addEventListener('input', (e) => {
             localStorage.setItem('cliente_nombre', e.target.value);
         });
@@ -108,47 +97,60 @@
         fetch(URL_API)
             .then(res => res.json())
             .then(data => {
-                if (!data.ok) return;
-                
-                if (data.config && data.config.IMAGEN_PORTADA) {
+                // Convertir la solapa ajustes (array de clave/valor) en un objeto útil
+                let ajustesObj = {};
+                if (data.ajustes && Array.isArray(data.ajustes)) {
+                    data.ajustes.forEach(item => {
+                        ajustesObj[item.clave] = item.valor;
+                    });
+                }
+
+                if (ajustesObj.IMAGEN_PORTADA) {
                     document.getElementById('portada-wrapper').innerHTML = `
                         <div class="portada-container">
-                            <img src="${data.config.IMAGEN_PORTADA}" alt="Portada del Local" onclick="abrirModalZoom(this.src)">
+                            <img src="${ajustesObj.IMAGEN_PORTADA}" alt="Portada del Local" onclick="abrirModalZoom(this.src)">
                         </div>
                     `;
                 }
 
-                document.getElementById('titulo-menu').innerText = (data.config && data.config.NOMBRE_LOCAL) || "Nuestro Menú";
-                productosGlobal = data.productos;
+                document.getElementById('titulo-menu').innerText = ajustesObj.NOMBRE_LOCAL || "Nuestro Menú";
+                productosGlobal = data.productos || [];
                 const contenedor = document.getElementById('menu-container');
+                contenedor.innerHTML = "";
                 
-                data.categorias.forEach(cat => {
-                    const divCat = document.createElement('div');
-                    divCat.className = 'categoria';
-                    divCat.innerHTML = `<h2>${cat.nombre}</h2>`;
-                    
-                    const prodsCat = data.productos.filter(p => p.categoria_id == cat.id);
-                    prodsCat.forEach(p => {
-                        const imgTag = p.imagen ? `<img src="${p.imagen}" alt="${p.nombre}" onclick="abrirModalZoom(this.src)">` : '';
+                if (data.categorias && Array.isArray(data.categorias)) {
+                    data.categorias.forEach(cat => {
+                        const divCat = document.createElement('div');
+                        divCat.className = 'categoria';
+                        divCat.innerHTML = `<h2>${cat.nombre}</h2>`;
                         
-                        divCat.innerHTML += `
-                            <div class="producto">
-                                ${imgTag}
-                                <div class="info">
-                                    <strong>${p.nombre}</strong>
-                                    <p style="margin: 5px 0; color: #666; font-size: 0.9em;">${p.descripcion || ''}</p>
-                                    <span class="precio">$${p.precio}</span>
+                        const prodsCat = productosGlobal.filter(p => String(p.categoria_id) === String(cat.id));
+                        prodsCat.forEach(p => {
+                            const imgTag = p.imagen ? `<img src="${p.imagen}" alt="${p.nombre}" onclick="abrirModalZoom(this.src)">` : '';
+                            
+                            divCat.innerHTML += `
+                                <div class="producto">
+                                    ${imgTag}
+                                    <div class="info">
+                                        <strong>${p.nombre}</strong>
+                                        <p style="margin: 5px 0; color: #666; font-size: 0.9em;">${p.descripcion || ''}</p>
+                                        <span class="precio">$${p.precio}</span>
+                                    </div>
+                                    <button onclick="agregarAlCarrito('${p.id}')">Agregar</button>
                                 </div>
-                                <button onclick="agregarAlCarrito('${p.id}')">Agregar</button>
-                            </div>
-                        `;
+                            `;
+                        });
+                        contenedor.appendChild(divCat);
                     });
-                    contenedor.appendChild(divCat);
-                });
+                }
+            })
+            .catch(err => {
+                console.error("Error al cargar:", err);
+                document.getElementById('titulo-menu').innerText = "Error al conectar con el menú";
             });
 
         function agregarAlCarrito(idProducto) {
-            const producto = productosGlobal.find(p => p.id == idProducto);
+            const producto = productosGlobal.find(p => String(p.id) === String(idProducto));
             if (!producto) return;
 
             carrito.push(producto);
@@ -199,7 +201,6 @@
             return true;
         }
 
-        // Funciones del Modal de Zoom
         function abrirModalZoom(urlImagen) {
             const modal = document.getElementById('modalZoom');
             const img = document.getElementById('imgAmpliada');
