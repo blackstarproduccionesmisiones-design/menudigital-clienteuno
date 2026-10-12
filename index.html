@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Menú Digital</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f4f9; margin: 0; padding: 20px; padding-bottom: 140px; color: #333; }
+        .portada-container { text-align: center; margin-bottom: 15px; }
+        .portada-container img { max-width: 100%; max-height: 200px; border-radius: 8px; object-fit: cover; box-shadow: 0 2px 6px rgba(0,0,0,0.15); cursor: pointer; }
+        h1 { text-align: center; color: #d9534f; margin-top: 10px; }
+        .categoria { margin-top: 30px; }
+        .producto { background: #fff; padding: 15px; margin-bottom: 12px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 15px; }
+        .producto img { width: 80px; height: 80px; object-fit: cover; border-radius: 6px; flex-shrink: 0; background: #ddd; cursor: pointer; transition: transform 0.2s; }
+        .producto img:hover { transform: scale(1.05); }
+        .info { flex-grow: 1; }
+        .precio { font-weight: bold; color: #5cb85c; font-size: 1.1em; margin-top: 5px; display: block; }
+        button { background: #d9534f; color: #fff; border: none; padding: 8px 14px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        button:hover { background: #c9302c; }
+
+        /* Barra flotante del carrito y datos del cliente */
+        #carrito-flotante { 
+            position: fixed; bottom: 0; left: 0; width: 100%; background: #222; color: #fff; 
+            padding: 12px 20px; box-shadow: 0 -2px 10px rgba(0,0,0,0.3); box-sizing: border-box; 
+            display: flex; flex-direction: column; gap: 10px; z-index: 100;
+        }
+        .carrito-superior { display: flex; justify-content: space-between; align-items: center; font-size: 0.95em; }
+        
+        /* Inputs de datos del cliente */
+        .datos-cliente { display: flex; gap: 10px; width: 100%; flex-wrap: wrap; }
+        .datos-cliente input { 
+            flex: 1; min-width: 130px; padding: 8px; border-radius: 4px; border: none; font-size: 0.9em; 
+        }
+
+        #btn-whatsapp { 
+            background: #25d366; color: #fff; padding: 10px 20px; text-decoration: none; 
+            border-radius: 5px; font-weight: bold; display: none; text-align: center; width: 100%; box-sizing: border-box;
+        }
+        #btn-whatsapp:hover { background: #1ebd59; }
+
+        /* Estilos para el Modal de Zoom de Imágenes */
+        .modal-zoom {
+            display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.85); align-items: center; justify-content: center;
+        }
+        .modal-zoom img {
+            max-width: 90%; max-height: 85vh; border-radius: 12px; box-shadow: 0 5px 25px rgba(0,0,0,0.5);
+        }
+        .btn-cerrar {
+            position: absolute; top: 20px; right: 30px; color: #fff; font-size: 40px; font-weight: bold; cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Contenedor para la imagen de portada -->
+    <div id="portada-wrapper"></div>
+    
+    <h1 id="titulo-menu">Cargando Menú...</h1>
+    <div id="menu-container"></div>
+
+    <!-- Barra fija del carrito y datos -->
+    <div id="carrito-flotante">
+        <div class="datos-cliente">
+            <input type="text" id="inputNombre" placeholder="Tu Nombre y Apellido" required>
+            <input type="tel" id="inputTelefono" placeholder="Tu Teléfono / WhatsApp" required>
+        </div>
+        
+        <div class="carrito-superior">
+            <div>
+                <strong>Carrito:</strong> <span id="contador-carrito">0</span> ítems | 
+                <strong>Total:</strong> $<span id="total-carrito">0</span>
+            </div>
+        </div>
+        <a id="btn-whatsapp" href="#" onclick="return validarYEnviarWhatsApp(event);">Enviar Pedido por WhatsApp</a>
+    </div>
+
+    <!-- Modal para zoom de imágenes -->
+    <div id="modalZoom" class="modal-zoom" onclick="cerrarModalZoom()">
+        <span class="btn-cerrar">&times;</span>
+        <img id="imgAmpliada" src="" alt="Vista ampliada">
+    </div>
+
+    <script>
+        const URL_API = "https://script.google.com/macros/s/AKfycbx40rO0GfqLfTlns3g_0AALesmMrgI88sZjnvIPIGz36TCoTLQrI1XyqCGBww0JtiSZ/exec";
+        const NUMERO_WHATSAPP = "5493764561004"; 
+
+        let carrito = [];
+        let productosGlobal = [];
+
+        // Guardar y recuperar datos del cliente automáticamente
+        document.getElementById('inputNombre').addEventListener('input', (e) => {
+            localStorage.setItem('cliente_nombre', e.target.value);
+        });
+        document.getElementById('inputTelefono').addEventListener('input', (e) => {
+            localStorage.setItem('cliente_telefono', e.target.value);
+        });
+
+        window.addEventListener('DOMContentLoaded', () => {
+            if(localStorage.getItem('cliente_nombre')) {
+                document.getElementById('inputNombre').value = localStorage.getItem('cliente_nombre');
+            }
+            if(localStorage.getItem('cliente_telefono')) {
+                document.getElementById('inputTelefono').value = localStorage.getItem('cliente_telefono');
+            }
+        });
+
+        fetch(URL_API)
+            .then(res => res.json())
+            .then(data => {
+                if (!data.ok) return;
+                
+                if (data.config && data.config.IMAGEN_PORTADA) {
+                    document.getElementById('portada-wrapper').innerHTML = `
+                        <div class="portada-container">
+                            <img src="${data.config.IMAGEN_PORTADA}" alt="Portada del Local" onclick="abrirModalZoom(this.src)">
+                        </div>
+                    `;
+                }
+
+                document.getElementById('titulo-menu').innerText = (data.config && data.config.NOMBRE_LOCAL) || "Nuestro Menú";
+                productosGlobal = data.productos;
+                const contenedor = document.getElementById('menu-container');
+                
+                data.categorias.forEach(cat => {
+                    const divCat = document.createElement('div');
+                    divCat.className = 'categoria';
+                    divCat.innerHTML = `<h2>${cat.nombre}</h2>`;
+                    
+                    const prodsCat = data.productos.filter(p => p.categoria_id == cat.id);
+                    prodsCat.forEach(p => {
+                        const imgTag = p.imagen ? `<img src="${p.imagen}" alt="${p.nombre}" onclick="abrirModalZoom(this.src)">` : '';
+                        
+                        divCat.innerHTML += `
+                            <div class="producto">
+                                ${imgTag}
+                                <div class="info">
+                                    <strong>${p.nombre}</strong>
+                                    <p style="margin: 5px 0; color: #666; font-size: 0.9em;">${p.descripcion || ''}</p>
+                                    <span class="precio">$${p.precio}</span>
+                                </div>
+                                <button onclick="agregarAlCarrito('${p.id}')">Agregar</button>
+                            </div>
+                        `;
+                    });
+                    contenedor.appendChild(divCat);
+                });
+            });
+
+        function agregarAlCarrito(idProducto) {
+            const producto = productosGlobal.find(p => p.id == idProducto);
+            if (!producto) return;
+
+            carrito.push(producto);
+            actualizarCarrito();
+        }
+
+        function actualizarCarrito() {
+            document.getElementById('contador-carrito').innerText = carrito.length;
+            
+            const total = carrito.reduce((acc, item) => acc + Number(item.precio), 0);
+            document.getElementById('total-carrito').innerText = total;
+
+            const btnWp = document.getElementById('btn-whatsapp');
+            if (carrito.length > 0) {
+                btnWp.style.display = "block";
+            } else {
+                btnWp.style.display = "none";
+            }
+        }
+
+        function validarYEnviarWhatsApp(e) {
+            const nombre = document.getElementById('inputNombre').value.trim();
+            const telefono = document.getElementById('inputTelefono').value.trim();
+
+            if (!nombre || !telefono) {
+                e.preventDefault();
+                alert("Por favor, completa tu Nombre y Teléfono antes de enviar el pedido.");
+                document.getElementById('inputNombre').focus();
+                return false;
+            }
+
+            const total = carrito.reduce((acc, item) => acc + Number(item.precio), 0);
+
+            let mensaje = `*¡Hola! Nuevo Pedido* 🍔\n\n`;
+            mensaje += `👤 *Cliente:* ${nombre}\n`;
+            mensaje += `📞 *Teléfono:* ${telefono}\n\n`;
+            mensaje += `*Detalle del pedido:*\n`;
+            
+            carrito.forEach((item, index) => {
+                mensaje += `${index + 1}. ${item.nombre} - $${item.precio}\n`;
+            });
+            
+            mensaje += `\n*Total a pagar: $${total}*`;
+
+            const urlWp = `https://api.whatsapp.com/send?phone=${NUMERO_WHATSAPP}&text=${encodeURIComponent(mensaje)}`;
+            document.getElementById('btn-whatsapp').href = urlWp;
+            
+            return true;
+        }
+
+        // Funciones del Modal de Zoom
+        function abrirModalZoom(urlImagen) {
+            const modal = document.getElementById('modalZoom');
+            const img = document.getElementById('imgAmpliada');
+            img.src = urlImagen;
+            modal.style.display = 'flex';
+        }
+
+        function cerrarModalZoom() {
+            document.getElementById('modalZoom').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
